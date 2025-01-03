@@ -23,6 +23,8 @@
     exit(EXIT_FAILURE);                                                        \
   } while (0)
 
+unsigned long offset=0;
+
 static void help(char const *argv0) {
   exit_with_error("Usage: %s <image>:<mountpoint> [<image>:<mountpoint>]...  "
                   "-- <command> [args...]\n",
@@ -96,7 +98,9 @@ static void do_mount(const mount_entry_t *entry) {
   if (mnt_context_set_fstype(cxt, "squashfs") != 0)
     errx(EXIT_FAILURE, "Failed to set fstype to squashfs");
 
-  if (mnt_context_append_options(cxt, "loop,nosuid,nodev,ro") != 0)
+  char options_buffer[100] = {0};
+  snprintf(options_buffer, 50, "loop,nosuid,nodev,ro,offset=%lu", offset);
+  if (mnt_context_append_options(cxt, options_buffer) != 0)
     errx(EXIT_FAILURE, "Failed to set mount options");
 
   if (mnt_context_set_source(cxt, entry->squashfs_file) != 0)
@@ -299,6 +303,10 @@ int main(int argc, char **argv) {
     // Error on unrecognized flags.
     errx(EXIT_FAILURE, "Unknown flag %s", argv[i]);
   }
+
+  char *OFFSET=getenv("SQFSMNT_OFFSET");
+  char *endptr;
+  if (OFFSET != NULL) offset=strtoul(OFFSET, &endptr, 10);
 
   if (argc <= positional_args + 1) {
     exit_with_error("no command given");
