@@ -304,7 +304,7 @@ int main(int argc, char **argv) {
     errx(EXIT_FAILURE, "Unknown flag %s", argv[i]);
   }
 
-  char *OFFSET=getenv("SQFSMNT_OFFSET");
+  char *OFFSET=getenv("SQUASHFS_MOUNT_OFFSET");
   char *endptr;
   if (OFFSET != NULL) offset=strtoul(OFFSET, &endptr, 10);
 
