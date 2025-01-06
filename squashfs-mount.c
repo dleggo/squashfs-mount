@@ -182,6 +182,9 @@ static mount_entry_t *parse_mount_entries(char **argv, int argc) {
       char *offset_str = strtok(NULL, ":");
       if (offset_str) {
         if (offset_str[0] == '@') {
+          if (strtoll(offset_str + 1, NULL, 10) < 0) {
+            errx(EXIT_FAILURE, "invalid format %s", argv[i]);
+          }
           offset = strtoul(offset_str + 1, NULL, 10);
         } else {
           errx(EXIT_FAILURE, "invalid format %s", argv[i]);
