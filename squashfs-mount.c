@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include <libmount/libmount.h>
 
@@ -23,8 +24,6 @@
     exit(EXIT_FAILURE);                                                        \
   } while (0)
 
-unsigned long offset=0;
-
 static void help(char const *argv0) {
   exit_with_error("Usage: %s <image>:<mountpoint> [<image>:<mountpoint>]...  "
                   "-- <command> [args...]\n",
@@ -34,7 +33,17 @@ static void help(char const *argv0) {
 typedef struct {
   char squashfs_file[PATH_MAX];
   char mountpoint[PATH_MAX];
+  unsigned long offset;
 } mount_entry_t;
+
+unsigned long get_file_size(const char *filename) {
+    struct stat file_status;
+    if (stat(filename, &file_status) < 0) {
+        errx(EXIT_FAILURE, "Failed to stat file %s", filename);
+    }
+
+    return file_status.st_size;
+}
 
 static void unshare_mntns_and_become_root() {
   if (unshare(CLONE_NEWNS) != 0)
@@ -66,7 +75,8 @@ static void return_to_user_and_no_new_privs(int uid) {
 /// check if squashsfs_file is an existent file, mounpoint is an existent
 /// directory
 static void validate_file_and_mountpoint(char const *squashfs_file,
-                                         char const *mountpoint) {
+                                         char const *mountpoint,
+                                         unsigned long offset) {
   struct stat mnt_stat;
   // Check that the mount point exists.
   int mnt_status = stat(mountpoint, &mnt_stat);
@@ -83,12 +93,16 @@ static void validate_file_and_mountpoint(char const *squashfs_file,
   if (!S_ISREG(mnt_stat.st_mode))
     errx(EXIT_FAILURE, "Requested squashfs image \"%s\" is not a file",
          squashfs_file);
+
+  if (offset > get_file_size(squashfs_file))
+    errx(EXIT_FAILURE, "Requested offset %lu is larger than image size %lu",
+         offset, get_file_size(squashfs_file));
 }
 
 static void do_mount(const mount_entry_t *entry) {
   struct libmnt_context *cxt;
 
-  validate_file_and_mountpoint(entry->squashfs_file, entry->mountpoint);
+  validate_file_and_mountpoint(entry->squashfs_file, entry->mountpoint, entry->offset);
 
   cxt = mnt_new_context();
 
@@ -99,7 +113,7 @@ static void do_mount(const mount_entry_t *entry) {
     errx(EXIT_FAILURE, "Failed to set fstype to squashfs");
 
   char options_buffer[100] = {0};
-  snprintf(options_buffer, 50, "loop,nosuid,nodev,ro,offset=%lu", offset);
+  snprintf(options_buffer, 50, "loop,nosuid,nodev,ro,offset=%lu", entry->offset);
   if (mnt_context_append_options(cxt, options_buffer) != 0)
     errx(EXIT_FAILURE, "Failed to set mount options");
 
@@ -161,17 +175,23 @@ static mount_entry_t *parse_mount_entries(char **argv, int argc) {
 
   for (int i = 0; i < argc; ++i) {
     char *mnt, *file;
+    unsigned long offset = 0;
     if (!(file = strtok(argv[i], ":")) || !(mnt = strtok(NULL, ":"))) {
       errx(EXIT_FAILURE, "invalid format %s", argv[i]);
     } else {
-      if (strtok(NULL, ":")) {
-        // expect file:mountpoint, strtok must return NULL when called once more
-        errx(EXIT_FAILURE, "invalid format %s", argv[i]);
+      char *offset_str = strtok(NULL, ":");
+      if (offset_str) {
+        if (offset_str[0] == '@') {
+          offset = strtoul(offset_str + 1, NULL, 10);
+        } else {
+          errx(EXIT_FAILURE, "invalid format %s", argv[i]);
+        }
       }
     }
 
     strcpy(mount_entries[i].squashfs_file, file);
     strcpy(mount_entries[i].mountpoint, mnt);
+    mount_entries[i].offset = offset;
 
     // convert to absolute paths (if needed)
     // absolute paths are skipped, since we allow to do nested mounts (for given
@@ -303,10 +323,6 @@ int main(int argc, char **argv) {
     // Error on unrecognized flags.
     errx(EXIT_FAILURE, "Unknown flag %s", argv[i]);
   }
-
-  char *OFFSET=getenv("SQUASHFS_MOUNT_OFFSET");
-  char *endptr;
-  if (OFFSET != NULL) offset=strtoul(OFFSET, &endptr, 10);
 
   if (argc <= positional_args + 1) {
     exit_with_error("no command given");
