@@ -25,7 +25,7 @@
   } while (0)
 
 static void help(char const *argv0) {
-  exit_with_error("Usage: %s <image>:<mountpoint> [<image>:<mountpoint>]...  "
+  exit_with_error("Usage: %s <image>[@<offset>]:<mountpoint> [<image>[@<offset>]:<mountpoint>]...  "
                   "-- <command> [args...]\n",
                   argv0);
 }
@@ -169,27 +169,47 @@ static int compare_mountpoint(const void *p1, const void *p2) {
 }
 
 /// split by `:` and convert to abspath, sort by mountpoint
-static mount_entry_t *parse_mount_entries(char **argv, int argc) {
-  // TODO `:` in argv get overwritten by `\0` in this function, is this OK?
+static mount_entry_t *parse_mount_entries(const char **argv, int argc) {
   mount_entry_t *mount_entries = malloc(sizeof(mount_entry_t) * argc);
 
+  // make a copy of argv, strtok overwrites the token with \0
+  char** arguments = malloc(argc * sizeof(char*));
   for (int i = 0; i < argc; ++i) {
-    char *mnt, *file;
+    arguments[i] = strdup(argv[i]);
+  }
+
+  for (int i = 0; i < argc; ++i) {
+    char *mnt, *file, *file_and_offset, *offset_str;
     unsigned long offset = 0;
-    if (!(file = strtok(argv[i], ":")) || !(mnt = strtok(NULL, ":"))) {
+    // split into file@offset and mountpoint
+    if (!(file_and_offset = strtok(arguments[i], ":")) ||
+        !(mnt = strtok(NULL, ":"))) {
       errx(EXIT_FAILURE, "invalid format %s", argv[i]);
-    } else {
-      char *offset_str = strtok(NULL, ":");
-      if (offset_str) {
-        if (offset_str[0] == '@') {
-          if (strtoll(offset_str + 1, NULL, 10) < 0) {
-            errx(EXIT_FAILURE, "invalid format %s", argv[i]);
-          }
-          offset = strtoul(offset_str + 1, NULL, 10);
-        } else {
-          errx(EXIT_FAILURE, "invalid format %s", argv[i]);
-        }
+    }
+    // expect file:mountpoint, strtok must return NULL when called once more
+    if (strtok(NULL, ":")) {
+      errx(EXIT_FAILURE, "invalid format %s", argv[i]);
+    }
+    // extract file from <file>[@<offset>]
+    if (!(file = strtok(file_and_offset, "@"))) {
+      errx(EXIT_FAILURE, "invalid format %s", argv[i]);
+    }
+    // if @offset is present, attempt to parse offset
+    if ((offset_str = strtok(NULL, "@"))) {
+      char *endptr;
+      // check if value is negative
+      if (strtoll(offset_str, NULL, 10) < 0) {
+        errx(EXIT_FAILURE, "invalid value in offset: %s", argv[i]);
       }
+      // parse offset
+      offset = strtoul(offset_str, &endptr, 10);
+      if (errno != 0 || *endptr != '\0') {
+        errx(EXIT_FAILURE, "invalid value in offset: %s", argv[i]);
+      }
+    }
+    // expect file_and_offset only contains one `@`
+    if (strtok(NULL, "@")) {
+      errx(EXIT_FAILURE, "invalid format %s", argv[i]);
     }
 
     strcpy(mount_entries[i].squashfs_file, file);
@@ -209,6 +229,10 @@ static mount_entry_t *parse_mount_entries(char **argv, int argc) {
       errx(EXIT_FAILURE, "Failed to obtain realpath of %s, error: %s", mnt,
            strerror(errno));
     }
+  }
+
+  for (int i = 0; i < argc; ++i) {
+    free(arguments[i]);
   }
 
   // sort by mountpoint
@@ -343,7 +367,7 @@ int main(int argc, char **argv) {
     return execvpe(fwd_argv[0], fwd_argv, new_env);
   }
 
-  mount_entries = parse_mount_entries(argv, positional_args);
+  mount_entries = parse_mount_entries((const char**)argv, positional_args);
 
   unshare_mntns_and_become_root();
   do_mount_loop(mount_entries, positional_args);
