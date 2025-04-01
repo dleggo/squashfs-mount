@@ -195,20 +195,21 @@ static mount_entry_t *parse_mount_entries(const char **argv, int argc) {
     }
     // if @offset is present, attempt to parse offset
     if ((offset_str = strtok(NULL, "@"))) {
-      char *endptr;
       // check if value is negative
-      if (strtoll(offset_str, NULL, 10) < 0) {
-        errx(EXIT_FAILURE, "invalid value in offset: %s", argv[i]);
+      long long _f;
+      if ((_f = strtoll(offset_str, NULL, 10)) < 0) {
+        errx(EXIT_FAILURE, "offset (=%lld) must be >0: %s", _f, argv[i]);
       }
       // parse offset
+      char *endptr;
       offset = strtoul(offset_str, &endptr, 10);
-      if (errno != 0 || *endptr != '\0') {
-        errx(EXIT_FAILURE, "invalid value in offset: %s", argv[i]);
+      if (*endptr != '\0') {
+        errx(EXIT_FAILURE, "invalid value in offset: %s from %s", offset_str, argv[i]);
       }
-    }
-    // expect file_and_offset only contains one `@`
-    if (strtok(NULL, "@")) {
-      errx(EXIT_FAILURE, "invalid format %s", argv[i]);
+      // expect file_and_offset only contains one `@`
+      if (strtok(NULL, "@")) {
+        errx(EXIT_FAILURE, "invalid format: %s", argv[i]);
+      }
     }
 
     strcpy(mount_entries[i].squashfs_file, file);
