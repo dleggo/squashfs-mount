@@ -21,7 +21,7 @@ jobs:
           sudo rpm --install "$(find rpm/RPMS -name '*.rpm' -type f -print -quit)"
           find rpm -name '*.rpm' -type f -exec cp {} . \;
       - name: upload-rpm
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: rpm
           path: '*.rpm'
@@ -31,7 +31,7 @@ jobs:
     needs: rpm
     steps:
       - name: download-artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: rpm
       - name: release
