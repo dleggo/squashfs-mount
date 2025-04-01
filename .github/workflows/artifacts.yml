@@ -6,7 +6,7 @@ on: [push, pull_request]
 
 jobs:
   rpm:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     container: registry.suse.com/bci/bci-base:15.3
     steps:
       - name: setup-environment
@@ -27,7 +27,7 @@ jobs:
           path: '*.rpm'
 
   tag-release:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     needs: rpm
     steps:
       - name: download-artifacts
