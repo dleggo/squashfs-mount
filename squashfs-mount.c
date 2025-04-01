@@ -38,10 +38,9 @@ typedef struct {
 
 unsigned long get_file_size(const char *filename) {
     struct stat file_status;
-    if (stat(filename, &file_status) < 0) {
+    if (stat(filename, &file_status) != 0) {
         errx(EXIT_FAILURE, "Failed to stat file %s", filename);
     }
-
     return file_status.st_size;
 }
 
