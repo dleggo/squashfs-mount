@@ -90,5 +90,5 @@ git commit -m "Release ${NEW_VERSION}"
 
 # Tag the new release
 if [ "$_tag" -eq "1" ]; then
-    git tag -a "$NEW_VERSION" -m "Release version $NEW_VERSION"
+    git tag -a "v$NEW_VERSION" -m "Release version $NEW_VERSION"
 fi

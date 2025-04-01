@@ -30,6 +30,16 @@ function setup() {
         echo "tools stack" >> tools/fileB.txt
     )
     mksquashfs "$dd"  ${SQFSDIR}/tools.sqfs -quiet -noappend && rm -r "$dd"
+
+    dd=$(mktemp -d)
+    (
+        umask 022
+        cd "$dd" || exit
+        mkdir tools
+        echo "tools stack" >> tools/fileB.txt
+    )
+    mksquashfs "$dd"  ${SQFSDIR}/tools-offset.sqfs -offset 2048 -quiet -noappend && rm -r "$dd"
+
 }
 
 function teardown() {
@@ -39,6 +49,10 @@ function teardown() {
 
 @test "mount_single_image" {
     run squashfs-mount ${SQFSDIR}/binaries.sqfs:/user-environment -- cat /user-environment/spack-install/fileA.txt
+}
+
+@test "mount_offset_image" {
+    run squashfs-mount ${SQFSDIR}/tools-offset.sqfs@2048:/user-tools -- cat /user-tools/tools/fileB.txt
 }
 
 @test "mount_images" {
